@@ -14,7 +14,6 @@ start:           jmp main
 ;--------------------------
 main:           mov ax, 0b800h
                 mov es, ax
-                xor ax, ax
 
                 mov bx, 82h         ; номер позиции в строке (позиция в памяти) + перепрыгиваем пробел
                 mov cl, ds:[80h]    ; длина строки - не хватает регистров чтобы это хранить, проще каждый раз обращаться заново
@@ -28,19 +27,46 @@ main:           mov ax, 0b800h
                 sub cx, si          ; cx - new length of line ('cause skipping read symbols)
                 call print_user_string
 
+                mov bp, 5
+                mov bh, dh
+                call draw_ramka
+
                 push 1b19h          ; '-> but down' cyan on blue - arg1 for function
                 add cx, 2
                 push cx             ; str len - arg2 for func
                 sub ax, 1
                 push ax             ; str num - arg 3 for func
-                call print_symbols_string
+                call print_symbols_horizontal_string
 
                 push 1b18h          ; '->' but up - arg 1
                 push cx             ; str len - srg 2
                 add ax, 2           ; str num - arg 3
                 push ax
-                call print_symbols_string
+                call print_symbols_horizontal_string
 
+                push 1b1ah          ; ->, arg 4
+                push 3d             ; str len, arg 3
+                mov dx, 80d
+                sub dx, cx          ; dx = column num
+                and dx, 0FFFEh
+                push dx             ; column num, arg 2
+                sub ax, 2           ; high string
+                push ax             ; str num, arg 1
+                call print_symbols_vertical_string
+                add sp, 8           ; cleaning stack
+
+                push 1b1bh          ; <-
+                push 3d
+                add dx, cx
+                add dx, cx
+                dec dx              ; want to floor(dx)
+                and dx, 0FFFEh
+                push dx
+                push ax
+                call print_symbols_vertical_string
+                add sp, 8           ; cleaning stack
+
+                
                 mov ax, 4c00h
                 int 21h
 ;--------------------------
@@ -123,9 +149,7 @@ print_user_string proc
             mov es:[si], dx
             inc bx
             add si, 2
-            dec cl
-            cmp cl, 0
-            jg draw_user_str_cycle
+            loop draw_user_str_cycle
 
         xchg ax, di
         pop cx
@@ -136,16 +160,16 @@ print_user_string proc
 
 ;--------------------------
 ; PASCAL CALL TYPE
-; void print_symbols_string(symbol_color, str_len, string_num)
+; void print_symbols_horizontal_string(symbol_color, str_len, string_num)
 ; printing string of str_len symbols in center of string_num string full of symbols symbol_color
-;return nothing
+; return nothing
 ;ax - string num    | save(!)
 ;di                 | destroy | using num of memory cell
 ;si                 | destroy
 ;cx - string length | save(!)
-;bx - symbol & color
+;bx - symbol & color| save(!) not dx because mul
 ;--------------------------
-print_symbols_string proc 
+print_symbols_horizontal_string proc 
         push bp
         mov bp, sp
 
@@ -173,4 +197,121 @@ print_symbols_string proc
         ret 6d           ; clearing stack
 ;--------------------------
 
+
+;--------------------------
+; CDECL CALL TYPE
+;void print_symbols_vertical_string(string_num, column_num, string_length, symbol&color)
+;ax - string num        (save)
+;dx - column num        (save)
+;di - string length     (save)
+;bx - symbol & color |  (save)
+;si                  |  destroy
+;--------------------------
+print_symbols_vertical_string proc
+        push bp
+        mov bp, sp
+
+        mov ax, [bp + 4]         ; string num
+        push ax
+
+        mov si, 160d
+        mul si
+        mov si, ax              ; si = right str
+        pop ax                  ; saving ax
+
+        mov dx, [bp + 6]
+        add si, dx               ; dx = right column
+
+        mov di, [bp + 8]         ; str len
+        mov bx, [bp + 10]        ; symbol, color
+        push di
+
+        draw_vert_string_cycle:
+                mov es:[si], bx
+                add si, 160
+                dec di
+                cmp di, 0
+                jne draw_vert_string_cycle 
+
+        pop di                    ; saving di
+        pop bp
+        ret                       ; dont moving sp 'cause cdecl
+;--------------------------
+
+
+;--------------------------
+;draw ramka bp tymes (да у меня кончились регистры)
+; cx - start str length         | destroy
+; ax - str num
+; bx - color & symbol
+; si - counter of ramka high    | destroy
+; 
+;--------------------------
+draw_ramka proc 
+        mov si, 1
+
+        draw_one_ramka:
+            mov bl, 19h
+            add cx, 2           ; cx' = cx + 2 -> wide of ramka
+
+                push si
+            push bx
+            push cx             ; str len - arg2 for func
+            sub ax, si
+            push ax             ; str num - arg 3 for func
+            call print_symbols_horizontal_string
+                pop si
+
+                push si
+            mov bl, 18h
+            push bx             ; '->' but up - arg 1
+            push cx             ; str len - srg 2
+            add ax, si          ; str num - arg 3
+            add ax, si
+            push ax
+            call print_symbols_horizontal_string
+                pop si
+
+                push si
+            mov bl, 1ah
+            push bx             ; ->, arg 4
+            shl si, 1
+            sub ax, si           ; high string
+            add si, 1
+            push si             ; vertical str len, arg 3
+            mov dx, 80d
+            sub dx, cx          ; dx = column num
+            and dx, 0FFFEh
+            push dx             ; column num, arg 2
+            push ax             ; str num, arg 1
+            call print_symbols_vertical_string
+            add sp, 8           ; cleaning stack
+                pop si
+
+                push si
+            mov bl, 1bh
+            push bx          ; <-
+            shl si, 1
+            add si, 1
+            push si
+            add dx, cx
+            add dx, cx
+            dec dx              ; want to floor(dx)
+            and dx, 0FFFEh
+            push dx
+            push ax
+            call print_symbols_vertical_string
+            add sp, 8           ; cleaning stack
+                pop si
+
+            add ax, si
+            add si, 1
+            add bh, 1
+
+            dec bp
+            cmp bp, 0
+            jg draw_one_ramka
+
+        ret
+;--------------------------
 end		 start
