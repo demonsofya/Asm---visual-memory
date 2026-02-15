@@ -11,7 +11,7 @@ start:           jmp main
 ; 2 hex num - string num
 ; (but is can by any 2 symbols,it just be random color for result)
 ; cx is always string length
-;-------------------------
+;--------------------------
 main:           mov ax, 0b800h
                 mov es, ax
                 xor ax, ax
@@ -43,32 +43,32 @@ main:           mov ax, 0b800h
 
                 mov ax, 4c00h
                 int 21h
-;---------------------------
+;--------------------------
 
 
-;---------------------------
+;--------------------------
 ;reading two symbols and interpret them like a hex num, putted in al
 ;Entry:
 ;   bx - mem point  | returns to point after num
 ;Returns:
 ;   al - number - cause ax = al, and it is 2 hex nums - half of register 
-;---------------------------
+;--------------------------
 get_user_num proc 
-        mov ax, [bx]
-
+        mov ax, [bx]            
+                                ; first num
         cmp al, 57d             ; потому что ебучий литл эндиан
-        jg  first_hex_letter
+        jg  first_hex_letter    
 
-        cmp al, 48d
+        cmp al, 48d             ; ascii code of '0'-'9' starts from 48 and end with 57
         jl  first_hex_letter
 
-        sub al, 48d  
+        sub al, 48d             ; if it is 0-9
         jmp second_num
 
-    first_hex_letter:
-        sub al, 87d 
+    first_hex_letter:           ; if it is a-f
+        sub al, 87d             ; ascii code of 'a' starts from 87
 
-    second_num:
+    second_num:                 ; second num (if its not obvious)
         cmp ah, 57d
         jg  second_hex_letter
 
@@ -82,14 +82,14 @@ get_user_num proc
         sub ah, 87d  
 
     end:
-        shl al, 4
-        add al, ah
-        xor ah, ah       ; ax = al = hex num
+        shl al, 4        ; al *= 16 -> to it go in ah like 1st num
+        add al, ah       ; like 1st*16 + 2nd -> our num
+        xor ah, ah       ; ax = al = hex num, ah = 0
 
         add bx, 3d      ; jumping over readen symbols (also space after)
 
         ret
-;------------------------------
+;--------------------------
 
 
 
@@ -104,7 +104,7 @@ get_user_num proc
 ;   ax - ramka string num
 ;   dh - letters color + background color
 ;   bp              | destroy
-;----------------------------
+;--------------------------
 print_user_string proc
         mov di, ax          ; сохраняем перед умножением
         mov bp, dx
@@ -137,6 +137,7 @@ print_user_string proc
 ;--------------------------
 ; PASCAL CALL TYPE
 ; void print_symbols_string(symbol_color, str_len, string_num)
+; printing string of str_len symbols in center of string_num string full of symbols symbol_color
 ;return nothing
 ;ax - string num    | save(!)
 ;di                 | destroy | using num of memory cell
@@ -170,6 +171,6 @@ print_symbols_string proc
 
         pop bp
         ret 6d           ; clearing stack
-;-------------------------
+;--------------------------
 
 end		 start
