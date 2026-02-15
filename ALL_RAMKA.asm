@@ -22,51 +22,21 @@ main:           mov ax, 0b800h
                 mov dh, al          ; moving color to dh
 
                 call get_user_num   ; ax = string num
+
+                mov bp, ax
+                call get_user_num
+                xchg bp, ax         ; bp = ramka width, ax = string num
+                push bp
+
                 mov si, bx
                 sub si, 81h
                 sub cx, si          ; cx - new length of line ('cause skipping read symbols)
                 call print_user_string
 
-                mov bp, 5
+                pop bp
                 mov bh, dh
                 call draw_ramka
 
-                push 1b19h          ; '-> but down' cyan on blue - arg1 for function
-                add cx, 2
-                push cx             ; str len - arg2 for func
-                sub ax, 1
-                push ax             ; str num - arg 3 for func
-                call print_symbols_horizontal_string
-
-                push 1b18h          ; '->' but up - arg 1
-                push cx             ; str len - srg 2
-                add ax, 2           ; str num - arg 3
-                push ax
-                call print_symbols_horizontal_string
-
-                push 1b1ah          ; ->, arg 4
-                push 3d             ; str len, arg 3
-                mov dx, 80d
-                sub dx, cx          ; dx = column num
-                and dx, 0FFFEh
-                push dx             ; column num, arg 2
-                sub ax, 2           ; high string
-                push ax             ; str num, arg 1
-                call print_symbols_vertical_string
-                add sp, 8           ; cleaning stack
-
-                push 1b1bh          ; <-
-                push 3d
-                add dx, cx
-                add dx, cx
-                dec dx              ; want to floor(dx)
-                and dx, 0FFFEh
-                push dx
-                push ax
-                call print_symbols_vertical_string
-                add sp, 8           ; cleaning stack
-
-                
                 mov ax, 4c00h
                 int 21h
 ;--------------------------
