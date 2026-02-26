@@ -2,35 +2,144 @@
 .code
 org 100h
 
+string_width equ 10d
+
+screen_width equ 160d
+
+hearts_symbol   equ 03h
+spades_symbol   equ 06h
+diamonds_symbol equ 04h
+clubs_symbol    equ 05h
+
+right_arrow_symbol      equ 1ah
+left_arrow_symbol       equ 1bh
+up_arrow_symbol         equ 18h
+down_arrow_symbol       equ 19h
+
+white_smile_face_symbol equ 01h
+black_smile_face_symbol equ 02h
+one_note_symbol         equ 0dh
+two_notes_symbol        equ 0eh
+
+
 start:           jmp main
 
 
 ;--------------------MAIN-------------------------
 ; expects: string, started with space, 
+; 2 hex nums - 1st or 2nd ramka variant
+;-----1st ramka variant
 ; 2 hex nums - ramka latter & back color
 ; 2 hex num - string num
 ; 2 hex nums - ramka width 
 ; 2 hex nums - user string color
 ; 2 hex nums (from 1 to 3) - ramka style
 ; (but is can by any 2 symbols,it just be random color for result)
-; cx is always string length
+;-----2nd ramka variant
+; 2 hex nums - ramka back color
+; 2 hex num - ramka height
+; 2 hex nums - ramka width
+; 2 hex nums - string color
+; 2 hex nums - string num
+;-----
+; cx is always string length = string_width
 ;--------------------------
-main:           
-        mov ah, 09h
-        mov dx, offset Hello
+main:   
+        mov bx, 82h        ; getting first user num
+        mov cl, ds:[80h]        
+
+        call get_user_num
+        cmp ax, 3
+        je third_ramka_variant
+
+        cmp ax, 2
+        je second_ramka_variant
+
+        jmp first_ramka_variant
+
+second_ramka_variant:   
+
+        mov ax, 0b800h
+        mov es, ax   
+         
+        call get_user_num   ; 1st - color & symbol
+        mov di, ax
+
+        call get_user_num   ; 2nd - height
+        mov si, ax
+
+        call get_user_num   ; 3d - width
+        mov cx, ax
+
+        mov ax, di
+        mov ah, al
+
+        call draw_rectangle_ramka
+
+        call get_user_num   ; 4th - user string color
+        mov dh, al
+
+        call get_user_num   ; 5th - string num
+
+        mov si, bx
+        sub si, 81h         ; getting number of readen symbols (si - curr symbol position, 81h - start position)
+        mov cl, ds:[80h]
+        sub cx, si          ; cx - new length of line ('cause skipping read symbols)
+
+        call print_user_string
+
+        mov ax, 4c00h
         int 21h
 
-        xor dx, dx
-        xor ax, ax
+third_ramka_variant:
+
+        mov ax, 0b800h
+        mov es, ax   
+         
+        call get_user_num   ; 1st - color & symbol
+        mov di, ax
+
+        call get_user_num   ; 2nd - height
+        mov si, ax
+
+        call get_user_num   ; 3d - width
+        mov cx, ax
+
+        mov ax, di
+        mov ah, al
+
+        call draw_numbers_ramka
+
+        call get_user_num   ; 4th - user string color
+        mov dh, al
+
+        call get_user_num   ; 5th - string num
+
+        mov si, bx
+        sub si, 81h         ; getting number of readen symbols (si - curr symbol position, 81h - start position)
+        mov cl, ds:[80h]
+        sub cx, si          ; cx - new length of line ('cause skipping read symbols)
+
+        call print_user_string
+
+        mov ax, 4c00h
+        int 21h
+
+first_ramka_variant:
+
+        mov ah, 09h
+        mov dx, offset Hello
+        int 21h             ; printing Hello-message to user
 
         mov ax, 0b800h
         mov es, ax
-
-        mov bx, 82h         ; номер позиции в строке (позиция в памяти) + перепрыгиваем пробел
+        
         mov cl, ds:[80h]    ; длина строки - не хватает регистров чтобы это хранить, проще каждый раз обращаться заново
 
         call get_user_num   ; getting color
+        
         mov dh, al          ; moving color to dh
+        xor dl, dl
 
         call get_user_num   ; ax = string num
 
@@ -51,32 +160,41 @@ main:
         je first_type
         cmp si, 2
         je second_type
-        jmp third_type
+        cmp si, 3
+        je third_type
+        jmp fourth_type
 
 
-            first_type:
-        push 1ah
-        push 1bh
-        push 18h
-        push 19h
+first_type:
+        push right_arrow_symbol        
+        push left_arrow_symbol               
+        push up_arrow_symbol                
+        push down_arrow_symbol                
         jmp call_draw_ramka
 
-            second_type:
-        push 03h
-        push 04h
-        push 05h
-        push 06h
+second_type:
+        push hearts_symbol     
+        push diamonds_symbol                
+        push clubs_symbol                
+        push spades_symbol                
         jmp call_draw_ramka
 
-            third_type:
-        push 01h
-        push 02h
-        push 0dh
-        push 0eh
-        jmp call_draw_ramka   
+third_type:
+        push white_smile_face_symbol                
+        push black_smile_face_symbol               
+        push one_note_symbol              
+        push two_notes_symbol               
+        jmp call_draw_ramka  
 
-            call_draw_ramka:
-        mov cx, 10d
+fourth_type:
+        push 31h 
+        push 32h
+        push 33h
+        push 34h
+        jmp call_draw_ramka  
+
+call_draw_ramka:
+        mov cx, string_width
         mov bh, dh
         call draw_ramka
         add sp, 8
@@ -85,10 +203,12 @@ main:
         pop bx
         pop cx
 
-        xchg dx, ax
+        xchg dx, ax         ; saving ax 
         call get_user_num
-        xchg dx, ax
+        xchg dx, ax         ; moving read number to dx and old ax value to ax
         xchg dl, dh
+
+        mov cl, ds:[80h]
 
         mov si, bx
         sub si, 81h
@@ -105,6 +225,8 @@ main:
 ;reading two symbols and interpret them like a hex num, putted in al
 ;Entry:
 ;   bx - mem point  | returns to point after num
+;Destroy:
+;   bx 
 ;Returns:
 ;   al - number - cause ax = al, and it is 2 hex nums - half of register 
 ;--------------------------
@@ -120,10 +242,10 @@ get_user_num proc
         sub al, 48d             ; if it is 0-9
         jmp second_num
 
-            first_hex_letter:           ; if it is a-f
+first_hex_letter:               ; if it is a-f
         sub al, 87d             ; ascii code of 'a' starts from 87
 
-            second_num:                 ; second num (if its not obvious)
+second_num:                     ; second num (if its not obvious)
         cmp ah, 57d
         jg  second_hex_letter
 
@@ -133,15 +255,15 @@ get_user_num proc
         sub ah, 48d  
         jmp end
 
-            second_hex_letter:
+second_hex_letter:
         sub ah, 87d  
 
-            end:
+end:
         shl al, 4        ; al *= 16 -> to it go in ah like 1st num
         add al, ah       ; like 1st*16 + 2nd -> our num
         xor ah, ah       ; ax = al = hex num, ah = 0
 
-        add bx, 3d      ; jumping over readen symbols (also space after)
+        add bx, 3d      ; jumping over read symbols (also space after)
 
         ret
 ;--------------------------
@@ -153,23 +275,30 @@ get_user_num proc
 ;Expect:
 ;   es = 0b800h
 ;Entry:
-;   cl - str length | save(!)
-;   bx - mem point  | destroy
-;   ax - ramka string num
-;   dh - letters color + background color
-;   si              | destroy | using us num of mem cell
-;   bp              | destroy
-;   di              | destroy
+;   bx - mem point              | destroy
+;   ax - ramka string num       | save
+;   dh - letters + background color
+;Using registers:
+;   si - num of mem cell        | destroy 
+;   bp - as counter             | destroy
+;   di - for cycle              | destroy
+;Destroy:
+;   bx
+;   si
+;   bp 
+;   di
+;Return:
+;   nothing
 ;--------------------------
 print_user_string proc
-        push ax          ; сохраняем перед умножением
+        push ax             ; сохраняем перед умножением
         mov bp, dx
         push cx             ; save cx
 
         mov di, cx
-        mov cx, 10d
+        mov cx, string_width         ; TODO что такое нахуй 10????
 
-        mov si, 160d
+        mov si, screen_width
         mul si              ; отступ строк - dx не меняется потому что байт а не слово
         add ax, 80d
         sub ax, cx          ; двигаем в середину (cl тк каждый символ 2байта)
@@ -179,29 +308,29 @@ print_user_string proc
 
         xor bp, bp
 
-            drawing_many_strings:
+drawing_many_strings:       ; it is loop (cycle in other cycle)
         push si             ; saving start position
-        mov cx, 10d
-        add bp, 1
+        mov cx, string_width
+        inc bp
 
-                draw_user_1string:
-            mov dl, ds:[bx] 
-            mov es:[si], dx
-            inc bx
-            add si, 2
-            dec di
-            cmp di, 0
-            je draw_end
+draw_user_1string:
+        mov dl, ds:[bx] 
+        mov es:[si], dx
+        inc bx
+        add si, 2
+        dec di
+        cmp di, 0
+        je draw_end
 
-            loop draw_user_1string
+        loop draw_user_1string
 
         pop si
-        add si, 160d
+        add si, screen_width
         jmp drawing_many_strings
         
-        draw_end:
-        mov es:[si], 03h
-        mov es:[si+1], dh
+draw_end:
+        mov es:[si], hearts_symbol    ; serdechko symbol
+        mov es:[si+1], dh   ; back color
         add si, 2
         loop draw_end
 
@@ -221,7 +350,7 @@ print_user_string proc
 ; printing string of str_len symbols in center of string_num string full of symbols symbol_color
 ; return nothing
 ; Expect:
-;   db = 0b800h
+;   ex = 0b800h
 ; Entry:
 ;   1st param - symbol & color
 ;   2nd param - string length
@@ -242,17 +371,17 @@ print_symbols_horizontal_string proc
         push bp
         mov bp, sp
 
-        push si
+        push si         ; save si
         push ax         ; save ax
         push cx         ; save cx
-        push di
+        push di         ; save di
 
         mov ax, [bp + 4]         ; string num
         mov cx, [bp + 6]         ; str len
         mov bx, [bp + 8]         ; symbol, color
 
             
-        mov si, 160d
+        mov si, screen_width     ; TODO ПОЧЕМУ НЕ 781329????
         mul si          ; ax *= 160 - correct string
         add ax, 80d
         sub ax, cx      ; center of str
@@ -302,7 +431,7 @@ print_symbols_vertical_string proc
         mov ax, ss:[bp + 4]         ; string num
         push ax
 
-        mov dx, 160d
+        mov dx, screen_width
         mul dx
         mov dx, ax              ; dx = right str
         pop ax                  ; saving ax (cause mul)
@@ -315,9 +444,9 @@ print_symbols_vertical_string proc
         xchg cx, di
         xchg di, dx
 
-            draw_vert_string_cycle:
+draw_vert_string_cycle:
         mov es:[di], bx
-        add di, 160d
+        add di, screen_width
         loop draw_vert_string_cycle 
 
         xchg di, dx
@@ -331,22 +460,34 @@ print_symbols_vertical_string proc
 
 
 ;--------------------------
-;draw ramka bp tymes (да у меня кончились регистры)
-; cx - start str length         | destroy
-; ax - str num                  | save
-; bx - color & symbol           | save
-; si - counter of ramka high    | destroy to start bp value
-; bp - ramka width              | destroy to 0
-; arg_1, arg_2, arg_3, arg_4 - symbols for ramka
+;draw ramka bp times (да у меня кончились регистры)
+; Expect:
+;   ex = 0b800h
+; Entry:
+;   arg_1, arg_2, arg_3, arg_4 - symbols for ramka
+; Using registers:
+;   cx - start str length         | destroy
+;   ax - str num                  | save
+;   bx - color & symbol           | save
+;   si - counter of ramka high    | destroy to start bp value
+;   bp - ramka width              | destroy to 0
+;   di - using us bp              | destroy 
+; Destroy:
+;   cx
+;   si
+;   bp
+;   di
+; Return:
+;   nothing
 ;--------------------------
 draw_ramka proc 
         mov si, 1
         mov di, sp
 
-            draw_one_ramka:
+draw_one_ramka:
         xor bl, bl
         add bx, ss:[di + 2]
-        add cx, 2           ; cx' = cx + 2 -> wide of ramka
+        add cx, 2           ; cx' = cx + 2 -> wysdom (width) of ramka
 
         push bx             ; -> but down - arg1
 
@@ -417,13 +558,148 @@ draw_ramka proc
 
         pop si
         add ax, si
-        add si, 1
-        add bh, 1
+        inc si
+        inc bh
 
         dec bp
         cmp bp, 0
         jg draw_one_ramka
 
+
+        ret
+;--------------------------
+
+
+
+;--------------------------
+;draw ramka ah (symbol = 00) color cx width and si high
+; function that exsists only for next task
+;destroy:  di, si, dx,
+;save:     bx, ax, cx
+;--------------------------
+draw_rectangle_ramka proc
+        push ax
+        push bx
+
+        xor di, di
+
+    ; counting ramka position
+        xchg ax, di ;---- saving to mul
+        xor ax, ax
+        add ax, 80d
+        sub ax, cx      ; center of str
+        and ax, 0FFFEh  ; making num even, cause colors and symbols will change in opposite
+        xchg ax, di     ;di - correct address
+
+        push di
+
+        xor al, al      ; no symbol
+        mov dx, cx      ; saving cx
+
+draw_1_string:
+        rep stosw
+        mov cx, dx
+        sub di, dx
+        sub di, dx
+        add di, screen_width
+        dec si
+        cmp si, 0
+        jg draw_1_string 
+
+        pop di
+        add di, screen_width + 2
+        sub dx, 2
+        mov cx, dx
+
+        pop bx
+        pop ax
+
+        ret
+;--------------------------
+
+
+
+;--------------------------
+;draw ramka ah color cx width and si high
+;using numbers 1-9
+;destroy:  di, si, dx,
+;save:     bx, ax, cx
+;--------------------------
+draw_numbers_ramka proc
+        push ax
+        push bx
+
+        xor di, di
+
+    ; counting ramka position
+        xchg ax, di ;---- saving to mul
+        xor ax, ax
+        add ax, 80d
+        sub ax, cx      ; center of str
+        and ax, 0FFFEh  ; making num even, cause colors and symbols will change in opposite
+        xchg ax, di     ;di - correct address
+
+        xor al, al      ; no symbol
+        mov dx, cx      ; saving cx
+
+draw_first_string:
+        sub cx, 2
+
+        mov al, 31h     ; number 1 symbol
+        stosw
+
+        mov al, 32h     ; number 2 symbol
+        rep stosw 
+
+        mov al, 33h     ; number 3 symbol
+        stosw
+
+        mov cx, dx
+        sub di, dx
+        sub di, dx
+        add di, screen_width
+
+        dec si
+
+draw_one_string:
+        sub cx, 2
+
+        mov al, 34h     ; number 4 symbol
+        stosw
+
+        mov al, 35h     ; number 5 symbol
+        rep stosw
+
+        mov al, 36h     ; number 6 symbol
+        stosw
+
+        mov cx, dx
+        sub di, dx
+        sub di, dx
+        add di, screen_width
+        dec si
+        cmp si, 1
+        jg draw_one_string
+
+draw_last_string:
+        sub cx, 2
+
+        mov al, 37h 
+        stosw
+
+        mov al, 38h
+        rep stosw 
+        
+        mov al, 39h 
+        stosw
+
+        mov cx, dx
+        sub di, dx
+        sub di, dx
+        add di, screen_width
+
+        pop bx
+        pop ax
 
         ret
 ;--------------------------
